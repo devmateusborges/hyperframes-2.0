@@ -13,8 +13,8 @@ export function createApp(config?: ApiConfig) {
   const semaphore = new Semaphore(cfg.maxConcurrentRenders);
 
   app.onError((err, c) => {
-    const message = err instanceof Error ? err.message : "Internal server error";
-    return c.json({ error: message }, 500);
+    console.error("Unhandled error:", err);
+    return c.json({ error: "Internal server error" }, 500);
   });
 
   app.get("/health", (c) => c.json({ status: "ok" }));
@@ -66,8 +66,9 @@ export function createApp(config?: ApiConfig) {
       return c.json({ error: "Render failed" }, 500);
     }
 
+    release();
+
     if (!existsSync(outputPath)) {
-      release();
       return c.json({ error: "Render produced no output" }, 500);
     }
 
@@ -83,7 +84,6 @@ export function createApp(config?: ApiConfig) {
           await s.write(chunk);
         }
       } finally {
-        release();
         try { rmSync(outputPath); } catch {}
         const dir = outputPath.replace(/\/[^/]+$/, "");
         try { rmSync(dir, { recursive: true }); } catch {}
