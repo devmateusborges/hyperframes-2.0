@@ -48,6 +48,15 @@ describe("POST /render-scene", () => {
   });
 });
 
+describe("GET /render-scene/queue", () => {
+  it("returns queue status", async () => {
+    const res = await app.request("/render-scene/queue");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ active: 0, waiting: 0, max: 2 });
+  });
+});
+
 describe("POST /render-scene integration", () => {
   const hasChrome = !!process.env.CHROME_PATH || Bun.which("chrome-headless-shell");
   const hasFfmpeg = !!Bun.which("ffmpeg");

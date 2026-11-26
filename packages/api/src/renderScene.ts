@@ -13,6 +13,7 @@ export async function renderScene(
   html: string,
   options: RenderSceneOptions,
   config: ApiConfig,
+  abortSignal?: AbortSignal,
 ): Promise<string> {
   const width = options.width ?? 1080;
   const height = options.height ?? 1920;
@@ -37,12 +38,15 @@ export async function renderScene(
   });
 
   try {
-    await executeRenderJob(job, projectDir, outputPath);
-  } finally {
-    const indexPath = join(projectDir, "index.html");
-    if (existsSync(indexPath)) {
-      try { rmSync(indexPath); } catch {}
-    }
+    await executeRenderJob(job, projectDir, outputPath, undefined, abortSignal);
+  } catch (err) {
+    try { rmSync(projectDir, { recursive: true }); } catch {}
+    throw err;
+  }
+
+  const indexPath = join(projectDir, "index.html");
+  if (existsSync(indexPath)) {
+    try { rmSync(indexPath); } catch {}
   }
 
   return outputPath;

@@ -5,22 +5,44 @@ import { stream } from "hono/streaming";
 import { loadConfig, type ApiConfig } from "./config.js";
 import { validateRenderRequest, isValidationError } from "./validation.js";
 import { renderScene } from "./renderScene.js";
+import { Semaphore } from "./semaphore.js";
 
 export function createApp(config?: ApiConfig) {
   const cfg = config ?? loadConfig();
   const app = new Hono();
+  const semaphore = new Semaphore(cfg.maxConcurrentRenders);
+
+  app.onError((err, c) => {
+    const message = err instanceof Error ? err.message : "Internal server error";
+    return c.json({ error: message }, 500);
+  });
 
   app.get("/health", (c) => c.json({ status: "ok" }));
 
+  app.get("/render-scene/queue", (c) =>
+    c.json({ active: semaphore.active, waiting: semaphore.waiting, max: semaphore.max }),
+  );
+
   app.post("/render-scene", async (c) => {
-    const contentLength = parseInt(c.req.header("content-length") || "0", 10);
-    if (contentLength > cfg.maxBodySizeBytes) {
+    const contentLengthHeader = c.req.header("content-length");
+    if (contentLengthHeader && parseInt(contentLengthHeader, 10) > cfg.maxBodySizeBytes) {
+      return c.json({ error: "Request body too large" }, 413);
+    }
+
+    let rawBody: string;
+    try {
+      rawBody = await c.req.text();
+    } catch {
+      return c.json({ error: "Failed to read request body" }, 400);
+    }
+
+    if (rawBody.length > cfg.maxBodySizeBytes) {
       return c.json({ error: "Request body too large" }, 413);
     }
 
     let body: unknown;
     try {
-      body = await c.req.json();
+      body = JSON.parse(rawBody);
     } catch {
       return c.json({ error: "Invalid JSON" }, 400);
     }
@@ -30,15 +52,22 @@ export function createApp(config?: ApiConfig) {
       return c.json(validated, 400);
     }
 
+    const release = await semaphore.acquire();
     let outputPath: string;
     try {
-      outputPath = await renderScene(validated.html, validated.options ?? {}, cfg);
+      const abortSignal = AbortSignal.timeout(cfg.renderTimeoutMs);
+      outputPath = await renderScene(validated.html, validated.options ?? {}, cfg, abortSignal);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Render failed";
-      return c.json({ error: message }, 500);
+      release();
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        return c.json({ error: "Render timed out" }, 504);
+      }
+      console.error("Render failed:", err);
+      return c.json({ error: "Render failed" }, 500);
     }
 
     if (!existsSync(outputPath)) {
+      release();
       return c.json({ error: "Render produced no output" }, 500);
     }
 
@@ -48,13 +77,17 @@ export function createApp(config?: ApiConfig) {
     c.header("Content-Length", String(stat.size));
 
     return stream(c, async (s) => {
-      const readable = createReadStream(outputPath);
-      for await (const chunk of readable) {
-        await s.write(chunk);
+      try {
+        const readable = createReadStream(outputPath);
+        for await (const chunk of readable) {
+          await s.write(chunk);
+        }
+      } finally {
+        release();
+        try { rmSync(outputPath); } catch {}
+        const dir = outputPath.replace(/\/[^/]+$/, "");
+        try { rmSync(dir, { recursive: true }); } catch {}
       }
-      try { rmSync(outputPath); } catch {}
-      const dir = outputPath.replace(/\/[^/]+$/, "");
-      try { rmSync(dir, { recursive: true }); } catch {}
     });
   });
 
