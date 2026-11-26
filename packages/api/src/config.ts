@@ -5,6 +5,7 @@ export interface ApiConfig {
   renderTimeoutMs: number;
   defaultFps: number;
   defaultQuality: "draft" | "standard" | "high";
+  apiSecret?: string;
 }
 
 export function loadConfig(): ApiConfig {
@@ -15,5 +16,6 @@ export function loadConfig(): ApiConfig {
     renderTimeoutMs: parseInt(process.env.RENDER_TIMEOUT_MS || "30000", 10),
     defaultFps: parseInt(process.env.DEFAULT_FPS || "25", 10),
     defaultQuality: (process.env.DEFAULT_QUALITY as ApiConfig["defaultQuality"]) || "standard",
+    apiSecret: process.env.API_SECRET || undefined,
   };
 }

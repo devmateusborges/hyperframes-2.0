@@ -1,4 +1,5 @@
 import { createReadStream, rmSync, existsSync, statSync } from "node:fs";
+import { timingSafeEqual } from "node:crypto";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { stream } from "hono/streaming";
@@ -18,6 +19,20 @@ export function createApp(config?: ApiConfig) {
   });
 
   app.get("/health", (c) => c.json({ status: "ok" }));
+
+  if (cfg.apiSecret) {
+    const secretBuf = Buffer.from(cfg.apiSecret);
+    const publicPaths = new Set(["/health", "/render-scene/queue"]);
+    app.use("*", async (c, next) => {
+      if (publicPaths.has(c.req.path)) return next();
+      const header = c.req.header("x-api-secret") ?? "";
+      const headerBuf = Buffer.from(header);
+      if (headerBuf.length !== secretBuf.length || !timingSafeEqual(headerBuf, secretBuf)) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+      return next();
+    });
+  }
 
   app.get("/render-scene/queue", (c) =>
     c.json({ active: semaphore.active, waiting: semaphore.waiting, max: semaphore.max }),
