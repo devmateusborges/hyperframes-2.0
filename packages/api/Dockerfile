@@ -57,16 +57,18 @@ RUN case "$TARGETARCH" in \
 # ── chrome-headless-shell (deterministic BeginFrame capture) ─────────────────
 ARG CHROME_HEADLESS_SHELL_VERSION=158.0.8127.88
 ARG CHROME_HEADLESS_SHELL_SHA256_AMD64=63401333cc587645bfaeea7f0c90958b327d249251e23954a47f30112ca23d5b
+ARG CHROME_HEADLESS_SHELL_SHA256_ARM64=9f89b7ef6574e4bbf6ddda9f17f1fab5626e93d6f7d852653232d0d3554df975
 RUN case "$TARGETARCH" in \
-      amd64) CHS_SHA256="$CHROME_HEADLESS_SHELL_SHA256_AMD64" ;; \
+      amd64) CHS_SHA256="$CHROME_HEADLESS_SHELL_SHA256_AMD64"; CHS_PLATFORM="linux64" ;; \
+      arm64) CHS_SHA256="$CHROME_HEADLESS_SHELL_SHA256_ARM64"; CHS_PLATFORM="linux-arm64" ;; \
       *) echo "no pinned chrome-headless-shell for TARGETARCH '$TARGETARCH'" >&2; exit 1 ;; \
     esac \
-    && curl -fsSL -o /tmp/chs.zip "https://storage.googleapis.com/chrome-for-testing-public/$CHROME_HEADLESS_SHELL_VERSION/linux64/chrome-headless-shell-linux64.zip" \
+    && curl -fsSL -o /tmp/chs.zip "https://storage.googleapis.com/chrome-for-testing-public/$CHROME_HEADLESS_SHELL_VERSION/$CHS_PLATFORM/chrome-headless-shell-$CHS_PLATFORM.zip" \
     && echo "$CHS_SHA256  /tmp/chs.zip" | sha256sum -c - \
     && unzip -q /tmp/chs.zip -d /opt \
     && rm /tmp/chs.zip \
     && mkdir -p /opt/chrome \
-    && ln -s /opt/chrome-headless-shell-linux64/chrome-headless-shell /opt/chrome/chrome-headless-shell \
+    && ln -s /opt/chrome-headless-shell-$CHS_PLATFORM/chrome-headless-shell /opt/chrome/chrome-headless-shell \
     && /opt/chrome/chrome-headless-shell --version | grep -F "$CHROME_HEADLESS_SHELL_VERSION"
 
 ENV HYPERFRAMES_CHROME_PATH=/opt/chrome/chrome-headless-shell
