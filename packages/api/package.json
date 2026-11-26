@@ -1,0 +1,17 @@
+{
+  "name": "@hyperframes/api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "bun dist/server.js",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.6",
+    "@hyperframes/core": "workspace:^",
+    "@hyperframes/engine": "workspace:^",
+    "@hyperframes/producer": "workspace:^",
+    "hono": "^4.13.16"
+  }
+}
