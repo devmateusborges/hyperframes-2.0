@@ -118,3 +118,7 @@ export function startServer(config?: ApiConfig) {
     port: cfg.port,
   });
 }
+
+if (import.meta.main) {
+  startServer();
+}
